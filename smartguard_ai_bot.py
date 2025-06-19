@@ -67,7 +67,6 @@ def place_order(signal):
         print("[❌] Kan prijs niet ophalen of prijs is nul, order afgebroken.")
         return
 
-    min_vol = config.MIN_VOL.get(config.SYMBOL, 1)
     volume = int(max(min_vol, round(config.STAKE_USD / price, config.BASE_PRECISION)))
 
     payload = {
@@ -111,7 +110,5 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
 
 
