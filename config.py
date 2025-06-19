@@ -3,7 +3,7 @@
 # Bitunix API
 API_KEY = "c77c52561af677e83d0fa9284f478039"
 API_SECRET = "03856b04f28609cf9bdaa5dd75370466"
-BASE_URL = "https://openapi.bitunix.com"
+BASE_URL = "https://fapi.bitunix.com"
 
 # Trading instellingen
 SYMBOL = "BRETTUSDT"
