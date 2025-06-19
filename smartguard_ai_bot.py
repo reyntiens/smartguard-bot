@@ -3,31 +3,38 @@
 from flask import Flask, request
 import requests
 import time
+import json
 import hashlib
 import random
 import string
 import config
-import json
 
 app = Flask(__name__)
 
 def generate_nonce(length=32):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-def sha256_hex(s):
-    return hashlib.sha256(s.encode('utf-8')).hexdigest()
+def sha256(data):
+    return hashlib.sha256(data.encode('utf-8')).hexdigest()
 
-def sign_request(nonce, timestamp, api_key, query_params, body, secret_key):
-    digest = sha256_hex(nonce + timestamp + api_key + query_params + body)
-    sign = sha256_hex(digest + secret_key)
-    return sign
-
-def place_order(signal_type, price):
-    url = f"{config.BASE_URL}/api/v1/futures/trade/place_order"
-
-
+def create_signature(payload: dict, endpoint: str):
     nonce = generate_nonce()
     timestamp = str(int(time.time() * 1000))
+    query_string = ""  # geen query parameters voor POST
+    body = json.dumps(payload, separators=(',', ':'))  # zonder spaties
+
+    digest_input = nonce + timestamp + config.API_KEY + query_string + body
+    digest = sha256(digest_input)
+    sign = sha256(digest + config.API_SECRET)
+
+    return {
+        "nonce": nonce,
+        "timestamp": timestamp,
+        "sign": sign
+    }
+
+def place_order(signal_type):
+    url = f"{config.BASE_URL}/api/v1/futures/trade/place_order"
 
     payload = {
         "symbol": config.SYMBOL,
@@ -35,27 +42,25 @@ def place_order(signal_type, price):
         "leverage": config.LEVERAGE,
         "side": 1 if signal_type == "buy" else 2,
         "order_type": config.ORDER_TYPE,
-        "position_side": config.POSITION_SIDE_LONG if signal_type == "buy" else config.POSITION_SIDE_SHORT,
+        "position_side": config.POSITION_SIDE_LONG if signal_type == "buy" else config.POSITION_SIDE_SHORT
     }
 
-    query_params = ""  # geen query params
-    body_str = json.dumps(payload, separators=(',', ':'))  # zonder spaties!
-
-    sign = sign_request(nonce, timestamp, config.API_KEY, query_params, body_str, config.API_SECRET)
+    signature = create_signature(payload, "/api/v1/futures/trade/place_order")
 
     headers = {
+        "Content-Type": "application/json",
         "api-key": config.API_KEY,
-        "nonce": nonce,
-        "timestamp": timestamp,
-        "sign": sign,
-        "Content-Type": "application/json"
+        "sign": signature["sign"],
+        "nonce": signature["nonce"],
+        "timestamp": signature["timestamp"],
+        "language": "en-US"
     }
 
     print(f"[📤] Plaats order ({signal_type.upper()}): {url} | Payload: {payload}")
     try:
         response = requests.post(url, json=payload, headers=headers)
         print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response.text}")
-        if response.status_code != 200:
+        if response.status_code != 200 or '"code":10007' in response.text:
             print(f"[❌] Fout bij {signal_type.upper()} openen: {response.text}")
         else:
             print(f"[✅] Order geplaatst: {response.json()}")
@@ -69,12 +74,11 @@ def webhook():
         return "Ongeldig verzoek", 400
 
     signal = data['signal']
-    price = data.get('price', 0)
 
     if signal == 'buy':
-        place_order("buy", price)
+        place_order("buy")
     elif signal == 'sell':
-        place_order("sell", price)
+        place_order("sell")
     else:
         return "Ongeldig signaal", 400
 
@@ -82,6 +86,7 @@ def webhook():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
