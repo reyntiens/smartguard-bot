@@ -7,7 +7,6 @@ API_SECRET = "8878c5af67568fc92f9986f518c1b646"
 BASE_URL = "https://fapi.bitunix.com"
 
 SYMBOL = "BRETTUSDT"
-STAKE_EURO = 10  # dollarwaarde per trade
+STAKE_USD = 10  # Je inzet in dollars
 LEVERAGE = 10
-MIN_VOLUME = 70
-BASE_PRECISION = 0
+BASE_PRECISION = 0  # Zie trading pair info, BRETTUSDT = 0
