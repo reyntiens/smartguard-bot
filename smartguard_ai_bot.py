@@ -13,7 +13,7 @@ from config import (
 )
 
 app = Flask(__name__)
-BASE_URL = "https://api.bitunix.com/api/v1/private/futures/order/create"
+BASE_URL = "https://api.bitunix.com"  # ✅ Correcte basis-URL
 
 # === STATUS ===
 position_long = None
@@ -64,7 +64,7 @@ def place_order(side, price):
         result = response.json()
         log(f"📥 Antwoord van Bitunix: {response.status_code} - {result}")
         return result
-    except Exception:
+    except:
         log(f"📥 Antwoord van Bitunix: {response.status_code} - {response.text}")
         return {"code": -1, "msg": "Geen JSON antwoord"}
 
@@ -132,5 +132,6 @@ def webhook():
 
 if __name__ == '__main__':
     log(f"🤖 SmartGuard AI Bot gestart met €{STAKE_EURO} per positie en {LEVERAGE}x leverage.")
-    app.run(host='0.0.0.0', port=5000)
+    app.run(port=5000)
+
 
