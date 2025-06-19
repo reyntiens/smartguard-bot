@@ -34,13 +34,15 @@ def place_order(signal_type, price):
     }
 
     print(f"[📤] Plaats order ({signal_type.upper()}): {url} | Payload: {payload}")
-    response = requests.post(url, json=payload, headers=headers)
-    print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response.text}")
-
-    if response.status_code != 200:
-        print(f"[❌] Fout bij {signal_type.upper()} openen: {response.text}")
-    else:
-        print(f"[✅] Order geplaatst: {response.json()}")
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response.text}")
+        if response.status_code != 200:
+            print(f"[❌] Fout bij {signal_type.upper()} openen: {response.text}")
+        else:
+            print(f"[✅] Order geplaatst: {response.json()}")
+    except Exception as e:
+        print(f"[‼️] Netwerkfout: {e}")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -62,3 +64,4 @@ def webhook():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
