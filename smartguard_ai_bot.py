@@ -1,5 +1,3 @@
-# smartguard_ai_bot.py
-
 from flask import Flask, request
 import requests
 import time
@@ -11,11 +9,10 @@ app = Flask(__name__)
 
 def sign_payload(payload, secret):
     query_string = '&'.join([f"{key}={payload[key]}" for key in sorted(payload)])
-    signature = hmac.new(secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
-    return signature
+    return hmac.new(secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
 def place_order(signal_type, price):
-    url = f"{config.BASE_URL}/api/v1/private/futures/order/create"
+    url = f"{config.BASE_URL}/api/v1/futures/order/place"
 
     payload = {
         "symbol": config.SYMBOL,
@@ -64,4 +61,5 @@ def webhook():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
