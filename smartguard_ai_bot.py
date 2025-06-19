@@ -15,8 +15,8 @@ def sign_payload(payload, secret):
     return signature
 
 def place_order(signal_type, price):
-    url = f"{config.BASE_URL}/api/v1/private/futures/order/create"
-    
+    url = f"{config.BASE_URL}/api/v1/futures/order/place"
+
     payload = {
         "symbol": config.SYMBOL,
         "vol": config.VOLUME,
