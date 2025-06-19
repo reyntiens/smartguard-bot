@@ -1,61 +1,53 @@
-# smartguard_ai_bot.py
-
 from flask import Flask, request
 import requests
 import time
 import hashlib
 import hmac
-import uuid
+import random
+import string
 import json
 import config
-import math
 
 app = Flask(__name__)
 
-def sha256_hex(data):
-    return hashlib.sha256(data.encode('utf-8')).hexdigest()
+def generate_nonce(length=32):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+def sha256_hex(s):
+    return hashlib.sha256(s.encode('utf-8')).hexdigest()
 
 def get_price(symbol):
     url = f"{config.BASE_URL}/api/v1/futures/market/ticker?symbol={symbol}"
     try:
         response = requests.get(url)
         if response.status_code == 200:
-            return float(response.json()["data"]["lastPrice"])
+            data = response.json()
+            return float(data['data']['last']) if 'data' in data else None
         else:
             print(f"[❌] Prijs ophalen mislukt: {response.status_code} - {response.text}")
             return None
     except Exception as e:
-        print(f"[‼️] Prijs ophalen fout: {e}")
+        print(f"[‼️] Netwerkfout bij prijs ophalen: {e}")
         return None
 
-def sign_request(body_str, nonce, timestamp, api_key, secret_key, query_string=""):
-    digest_input = nonce + timestamp + api_key + query_string + body_str
+def calculate_signature(nonce, timestamp, api_key, query_string, body, secret_key):
+    digest_input = nonce + timestamp + api_key + query_string + body
     digest = sha256_hex(digest_input)
-    sign = sha256_hex(digest + secret_key)
-
-    print("== 🔐 Signature Debug ==")
-    print(f"Nonce: {nonce}")
-    print(f"Timestamp: {timestamp}")
-    print(f"Query string: {query_string}")
-    print(f"Body (JSON): {body_str}")
-    print(f"Digest input: {digest_input}")
-    print(f"Digest: {digest}")
-    print(f"Sign input: {digest + secret_key}")
-    print(f"Signature: {sign}")
-    print("========================")
-
+    sign_input = digest + secret_key
+    sign = sha256_hex(sign_input)
     return sign
 
 def place_order(signal_type):
+    url = f"{config.BASE_URL}/api/v1/futures/trade/place_order"
+    nonce = generate_nonce()
+    timestamp = str(int(time.time() * 1000))
+    
     price = get_price(config.SYMBOL)
     if not price:
         print("[❌] Kan prijs niet ophalen, order afgebroken.")
         return
 
-    # Bereken volume in coins (afronden naar boven, geen decimalen)
-    volume = math.ceil(config.STAKE_EURO / price)
-    if volume < config.MIN_VOLUME:
-        volume = config.MIN_VOLUME
+    volume = round(config.STAKE_EURO / price, config.BASE_PRECISION)
 
     payload = {
         "symbol": config.SYMBOL,
@@ -66,33 +58,30 @@ def place_order(signal_type):
         "position_side": config.POSITION_SIDE_LONG if signal_type == "buy" else config.POSITION_SIDE_SHORT
     }
 
-    url = f"{config.BASE_URL}/api/v1/futures/trade/place_order"
-    nonce = uuid.uuid4().hex
-    timestamp = str(int(time.time() * 1000))
-    body_str = json.dumps(payload, separators=(',', ':'))
-
-    sign = sign_request(body_str, nonce, timestamp, config.API_KEY, config.API_SECRET)
+    body = json.dumps(payload, separators=(',', ':'))
+    query_string = ""
+    sign = calculate_signature(nonce, timestamp, config.API_KEY, query_string, body, config.API_SECRET)
 
     headers = {
+        "Content-Type": "application/json",
         "api-key": config.API_KEY,
         "nonce": nonce,
         "timestamp": timestamp,
-        "sign": sign,
-        "Content-Type": "application/json"
+        "sign": sign
     }
 
+    print(f"== 🔐 Signature Debug ==\nNonce: {nonce}\nTimestamp: {timestamp}\nQuery string: {query_string}\nBody (JSON): {body}")
+    print(f"Digest input: {nonce + timestamp + config.API_KEY + query_string + body}")
+    print(f"Sign: {sign}\n========================")
+    
     print(f"[📤] Plaats order ({signal_type.upper()}): {url} | Payload: {payload}")
     try:
-        response = requests.post(url, data=body_str, headers=headers)
+        response = requests.post(url, headers=headers, data=body)
         print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response.text}")
-        if response.status_code == 200:
-            result = response.json()
-            if result.get("code") == 0:
-                print(f"[✅] Order succesvol geplaatst: {result}")
-            else:
-                print(f"[❌] Fout bij order: {result}")
+        if response.status_code == 200 and '"code":0' in response.text:
+            print(f"[✅] Order geplaatst: {response.json()}")
         else:
-            print(f"[❌] HTTP fout: {response.status_code}")
+            print(f"[❌] Fout bij {signal_type.upper()} openen: {response.text}")
     except Exception as e:
         print(f"[‼️] Netwerkfout: {e}")
 
@@ -114,5 +103,6 @@ def webhook():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
