@@ -3,7 +3,7 @@
 # Bitunix API
 API_KEY = "c77c52561af677e83d0fa9284f478039"
 API_SECRET = "03856b04f28609cf9bdaa5dd75370466"
-BASE_URL = "https://openapi.bitunix.com"  # ✅ DE ENIGE DIE WERKT OP RENDER
+BASE_URL = "https://contract.bitunix.com"
 
 # Telegram
 BOT_TOKEN = "7976964802:AAGXpRIP4usH51ceVIBcYltOWAN7PC9E2AI"
