@@ -1,31 +1,33 @@
+import time
 import hmac
 import hashlib
-import time
-import json
-from flask import Flask, request
 import requests
-import config  # <-- we halen info uit config.py
+from flask import Flask, request
+import config
 
 app = Flask(__name__)
 
-def generate_signature(payload, secret):
-    sorted_payload = sorted(payload.items())
-    encoded = "&".join(f"{k}={v}" for k, v in sorted_payload)
-    return hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+def log(msg):
+    timestamp = time.strftime("[%H:%M:%S]")
+    print(f"{timestamp} {msg}")
 
-def place_order(order_type, price):
+def generate_signature(payload, secret):
+    query_string = '&'.join([f"{k}={v}" for k, v in sorted(payload.items())])
+    return hmac.new(secret.encode(), query_string.encode(), hashlib.sha256).hexdigest()
+
+def place_order(direction, price):
     url = f"{config.BASE_URL}/api/v1/private/futures/order/create"
     timestamp = int(time.time() * 1000)
 
-    side = 1 if order_type == "buy" else 2
-    position_side = 1 if order_type == "buy" else 2
+    side = 1 if direction == "buy" else 2
+    position_side = 1 if direction == "buy" else 2
 
     payload = {
         "symbol": config.SYMBOL,
         "vol": config.VOLUME,
         "leverage": config.LEVERAGE,
         "side": side,
-        "order_type": 1,
+        "order_type": config.ORDER_TYPE,
         "position_side": position_side,
         "timestamp": timestamp
     }
@@ -38,22 +40,22 @@ def place_order(order_type, price):
         "ApiKey": config.API_KEY
     }
 
-    print(f"[📤] Plaats order ({order_type.upper()}): {url} | Payload: {payload}")
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response.text}")
-        return response.json()
-    except Exception as e:
-        print(f"[❌] Fout bij {order_type.upper()} openen: {e}")
-        return None
+    log(f"📤 Plaats order ({direction.upper()}): {url} | Payload: {payload}")
+    response = requests.post(url, json=payload, headers=headers)
+    log(f"📥 Antwoord van Bitunix: {response.status_code} - {response.text}")
 
-@app.route("/webhook", methods=["POST"])
+    if response.status_code != 200:
+        log(f"❌ Fout bij {direction.upper()} openen: {response.text}")
+        return None
+    return response.json()
+
+@app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
-    if not data or "signal" not in data:
-        return "Ongeldig verzoek", 400
+    if data is None:
+        return "No data", 400
 
-    signal = data["signal"]
+    signal = data.get("signal")
     price = data.get("price", 0)
 
     if signal == "buy":
@@ -61,11 +63,11 @@ def webhook():
     elif signal == "sell":
         place_order("sell", price)
     else:
-        return "Ongeldig signaal", 400
+        log("⚠️ Onbekend signaal ontvangen")
 
     return "OK", 200
 
-if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=10000)
+if __name__ == '__main__':
+    app.run(debug=False, port=5000)
 
 
