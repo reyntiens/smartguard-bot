@@ -12,7 +12,7 @@ def sign_payload(payload, secret):
     return hmac.new(secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
 
 def place_order(signal_type, price):
-    url = f"{config.BASE_URL}/api/v1/futures/order/place"
+   url = f"{config.BASE_URL}/api/v1/private/futures/order/create"
 
     payload = {
         "symbol": config.SYMBOL,
