@@ -13,7 +13,7 @@ from config import (
 )
 
 app = Flask(__name__)
-BASE_URL = "https://contract.bitunix.com"
+BASE_URL = "https://api.bitunix.com/api/v1/private/futures/order/create"
 
 # === STATUS ===
 position_long = None
