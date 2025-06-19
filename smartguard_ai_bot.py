@@ -13,7 +13,8 @@ from config import (
 )
 
 app = Flask(__name__)
-BASE_URL = "https://openapi.bitunix.com"  # ✅ Correcte basis-URL
+BASE_URL = "https://contract.bitunix.com"
+
 
 # === STATUS ===
 position_long = None
