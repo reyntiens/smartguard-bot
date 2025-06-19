@@ -1,73 +1,64 @@
-import time
-import hmac
-import hashlib
-import requests
+# smartguard_ai_bot.py
+
 from flask import Flask, request
+import requests
+import time
+import hashlib
+import hmac
 import config
 
 app = Flask(__name__)
 
-def log(msg):
-    timestamp = time.strftime("[%H:%M:%S]")
-    print(f"{timestamp} {msg}")
+def sign_payload(payload, secret):
+    query_string = '&'.join([f"{key}={payload[key]}" for key in sorted(payload)])
+    signature = hmac.new(secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+    return signature
 
-def generate_signature(payload, secret):
-    query_string = '&'.join([f"{k}={v}" for k, v in sorted(payload.items())])
-    return hmac.new(secret.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-
-def place_order(direction, price):
+def place_order(signal_type, price):
     url = f"{config.BASE_URL}/api/v1/private/futures/order/create"
-    timestamp = int(time.time() * 1000)
-
-    side = 1 if direction == "buy" else 2
-    position_side = 1 if direction == "buy" else 2
-
+    
     payload = {
         "symbol": config.SYMBOL,
         "vol": config.VOLUME,
         "leverage": config.LEVERAGE,
-        "side": side,
+        "side": 1 if signal_type == "buy" else 2,
         "order_type": config.ORDER_TYPE,
-        "position_side": position_side,
-        "timestamp": timestamp
+        "position_side": config.POSITION_SIDE_LONG if signal_type == "buy" else config.POSITION_SIDE_SHORT,
+        "timestamp": int(time.time() * 1000)
     }
-
-    sign = generate_signature(payload, config.API_SECRET)
-    payload["sign"] = sign
+    payload["sign"] = sign_payload(payload, config.API_SECRET)
 
     headers = {
         "Content-Type": "application/json",
         "ApiKey": config.API_KEY
     }
 
-    log(f"📤 Plaats order ({direction.upper()}): {url} | Payload: {payload}")
+    print(f"[📤] Plaats order ({signal_type.upper()}): {url} | Payload: {payload}")
     response = requests.post(url, json=payload, headers=headers)
-    log(f"📥 Antwoord van Bitunix: {response.status_code} - {response.text}")
+    print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response.text}")
 
     if response.status_code != 200:
-        log(f"❌ Fout bij {direction.upper()} openen: {response.text}")
-        return None
-    return response.json()
+        print(f"[❌] Fout bij {signal_type.upper()} openen: {response.text}")
+    else:
+        print(f"[✅] Order geplaatst: {response.json()}")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
-    if data is None:
-        return "No data", 400
+    if not data or 'signal' not in data:
+        return "Ongeldig verzoek", 400
 
-    signal = data.get("signal")
-    price = data.get("price", 0)
+    signal = data['signal']
+    price = data.get('price', 0)
 
-    if signal == "buy":
+    if signal == 'buy':
         place_order("buy", price)
-    elif signal == "sell":
+    elif signal == 'sell':
         place_order("sell", price)
     else:
-        log("⚠️ Onbekend signaal ontvangen")
+        return "Ongeldig signaal", 400
 
     return "OK", 200
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5000)
-
-
+    app.run(debug=True)
