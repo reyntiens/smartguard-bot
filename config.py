@@ -14,3 +14,6 @@ LEVERAGE = 10
 STOP_LOSS_PERCENT = 0.5  # zonder leverage
 TAKE_PROFIT_PERCENT = 0.3
 TRAILING_BUFFER_PERCENT = 0.1
+
+# Bitunix endpoint
+BASE_URL = "https://openapi.bitunix.com"
