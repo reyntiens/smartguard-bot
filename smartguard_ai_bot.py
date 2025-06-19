@@ -9,10 +9,11 @@ app = Flask(__name__)
 
 def sign_payload(payload, secret):
     query_string = '&'.join([f"{key}={payload[key]}" for key in sorted(payload)])
-    return hmac.new(secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+    signature = hmac.new(secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+    return signature
 
 def place_order(signal_type, price):
-   url = f"{config.BASE_URL}/api/v1/private/futures/order/create"
+    url = f"{config.BASE_URL}/api/v1/private/futures/order/create"
 
     payload = {
         "symbol": config.SYMBOL,
@@ -61,5 +62,4 @@ def webhook():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
 
