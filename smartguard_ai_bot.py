@@ -1,115 +1,100 @@
-from flask import Flask, request
-import requests
-import json
 import time
+import uuid
+import json
+import hmac
 import hashlib
-import random
-import string
-import config
+import requests
+from flask import Flask, request
+import config  # Aparte config.py zoals jij gebruikt
 
 app = Flask(__name__)
 
-def generate_nonce(length=32):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+def sha256_hex(data):
+    return hashlib.sha256(data.encode('utf-8')).hexdigest()
 
-def sha256_hex(s):
-    return hashlib.sha256(s.encode('utf-8')).hexdigest()
+def generate_signature(endpoint, body):
+    nonce = uuid.uuid4().hex
+    timestamp = str(int(time.time() * 1000))
+    query_string = ""  # geen query params bij POST
+    body_str = json.dumps(body, separators=(',', ':'))  # zonder spaties
 
-def get_current_price():
-    endpoint = f"{config.BASE_URL}/api/v1/futures/market/ticker?symbol={config.SYMBOL}"
+    digest_input = nonce + timestamp + config.API_KEY + query_string + body_str
+    digest = sha256_hex(digest_input)
+    sign_input = digest + config.API_SECRET
+    sign = sha256_hex(sign_input)
+
+    headers = {
+        'Content-Type': 'application/json',
+        'api-key': config.API_KEY,
+        'nonce': nonce,
+        'timestamp': timestamp,
+        'sign': sign,
+        'language': 'en-US'
+    }
+
+    return headers
+
+def get_price():
     try:
+        endpoint = f"{config.BASE_URL}/api/v1/futures/market/ticker?symbol={config.SYMBOL}"
         response = requests.get(endpoint)
         if response.status_code == 200:
             data = response.json()
-            return float(data["data"]["last"])
+            return float(data['data']['last'])  # huidige prijs
         else:
             print(f"[❌] Prijs ophalen mislukt: {response.status_code} - {response.text}")
             return None
     except Exception as e:
-        print(f"[‼️] Fout bij prijs ophalen: {e}")
+        print(f"[❌] Fout bij prijs ophalen: {e}")
         return None
 
-def calculate_volume(price):
-    dollar_amount = config.STAKE_EURO
-    volume = dollar_amount / price
-    return max(config.MIN_VOLUME, round(volume, config.BASE_PRECISION))
-
-def sign_request(body_json, nonce, timestamp):
-    query_string = ""
-    compact_body = json.dumps(body_json, separators=(',', ':'))
-    digest_input = nonce + timestamp + config.API_KEY + query_string + compact_body
-    digest = sha256_hex(digest_input)
-    signature = sha256_hex(digest + config.API_SECRET)
-
-    # Debug output
-    print("== 🔐 Signature Debug ==")
-    print(f"Nonce: {nonce}")
-    print(f"Timestamp: {timestamp}")
-    print(f"Query string: {query_string}")
-    print(f"Body (JSON): {compact_body}")
-    print(f"Digest input: {digest_input}")
-    print(f"Digest: {digest}")
-    print(f"Sign input: {digest + config.API_SECRET}")
-    print(f"Signature: {signature}")
-    print("========================")
-    return signature
-
-def place_order(signal_type):
-    url = f"{config.BASE_URL}/api/v1/futures/trade/place_order"
-    nonce = generate_nonce()
-    timestamp = str(int(time.time() * 1000))
-    
-    price = get_current_price()
+def place_order(signal):
+    price = get_price()
     if price is None:
         print("[❌] Kan prijs niet ophalen, order afgebroken.")
         return
 
-    volume = calculate_volume(price)
+    volume = round(config.STAKE_USD / price, config.BASE_PRECISION)
 
-    body = {
+    payload = {
         "symbol": config.SYMBOL,
         "vol": volume,
         "leverage": config.LEVERAGE,
-        "side": 1 if signal_type == "buy" else 2,
+        "side": 1 if signal == "buy" else 2,
         "order_type": 1,
-        "position_side": 1 if signal_type == "buy" else 2
+        "position_side": 1 if signal == "buy" else 2
     }
 
-    signature = sign_request(body, nonce, timestamp)
+    headers = generate_signature("/api/v1/futures/trade/place_order", payload)
+    endpoint = f"{config.BASE_URL}/api/v1/futures/trade/place_order"
 
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": config.API_KEY,
-        "nonce": nonce,
-        "timestamp": timestamp,
-        "sign": signature
-    }
-
-    print(f"[📤] Plaats order ({signal_type.upper()}): {url} | Payload: {body}")
+    print(f"[📤] Plaats order ({signal.upper()}): {endpoint} | Payload: {payload}")
+    response = requests.post(endpoint, headers=headers, json=payload)
     try:
-        response = requests.post(url, json=body, headers=headers)
-        print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response.text}")
-        if response.status_code != 200 or "code" in response.json() and response.json()["code"] != 0:
-            print(f"[❌] Fout bij {signal_type.upper()} openen: {response.json()}")
+        response_data = response.json()
+        print(f"[📥] Antwoord van Bitunix: {response.status_code} - {response_data}")
+        if response_data.get("code") == 0:
+            print("[✅] Order succesvol geplaatst.")
         else:
-            print(f"[✅] Order geplaatst: {response.json()}")
+            print(f"[❌] Fout bij {signal.upper()} openen: {response_data}")
     except Exception as e:
-        print(f"[‼️] Netwerkfout bij orderplaatsing: {e}")
+        print(f"[❌] Antwoord kon niet gelezen worden: {e}")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
-    if not data or 'signal' not in data:
-        return "Ongeldig verzoek", 400
+    signal = data.get("signal")
 
-    signal = data['signal']
-    if signal not in ['buy', 'sell']:
-        return "Ongeldig signaal", 400
+    if signal == "buy":
+        place_order("buy")
+    elif signal == "sell":
+        place_order("sell")
+    else:
+        print("[❌] Ongeldig signaal ontvangen.")
 
-    place_order(signal)
     return "OK", 200
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
 
 
