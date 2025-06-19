@@ -132,4 +132,5 @@ def webhook():
 
 if __name__ == '__main__':
     log(f"🤖 SmartGuard AI Bot gestart met €{STAKE_EURO} per positie en {LEVERAGE}x leverage.")
-    app.run(port=5000)
+    app.run(host='0.0.0.0', port=5000)
+
