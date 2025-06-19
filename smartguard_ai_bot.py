@@ -23,7 +23,8 @@ def sign_request(nonce, timestamp, api_key, query_params, body, secret_key):
     return sign
 
 def place_order(signal_type, price):
-    url = f"{config.BASE_URL}/api/v1/futures/order/place"
+    url = f"{config.BASE_URL}/api/v1/futures/trade/place_order"
+
 
     nonce = generate_nonce()
     timestamp = str(int(time.time() * 1000))
